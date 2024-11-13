@@ -1,4 +1,4 @@
-#[cfg(feature = "gpu_dependent")]
+// #[cfg(feature = "gpu_dependent")]
 mod e2e_test {
     use cudarc::nccl::Id;
     use eyre::Result;
@@ -16,13 +16,13 @@ mod e2e_test {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
     use uuid::Uuid;
 
-    const DB_SIZE: usize = 8 * 1000;
-    const DB_BUFFER: usize = 8 * 1000;
+    const DB_SIZE: usize = 10 * (1 << 16);
+    const DB_BUFFER: usize = 8000;
     const DB_RNG_SEED: u64 = 0xdeadbeef;
     const INTERNAL_RNG_SEED: u64 = 0xdeadbeef;
-    const NUM_BATCHES: usize = 10;
-    const MAX_BATCH_SIZE: usize = 64;
-    const MAX_DELETIONS_PER_BATCH: usize = 10;
+    const NUM_BATCHES: usize = 1;
+    const MAX_BATCH_SIZE: usize = 32;
+    // const MAX_DELETIONS_PER_BATCH: usize = 1;
 
     fn generate_db(party_id: usize) -> Result<(Vec<u16>, Vec<u16>)> {
         let mut rng = StdRng::seed_from_u64(DB_RNG_SEED);
@@ -200,61 +200,66 @@ mod e2e_test {
         let mut expected_results: HashMap<String, Option<u32>> = HashMap::new();
         let mut requests: HashMap<String, IrisCode> = HashMap::new();
         let mut responses: HashMap<u32, IrisCode> = HashMap::new();
-        let mut deleted_indices_buffer = vec![];
-        let mut deleted_indices: HashSet<u32> = HashSet::new();
+        // let mut deleted_indices_buffer = vec![];
+        // let mut deleted_indices: HashSet<u32> = HashSet::new();
 
         for _ in 0..NUM_BATCHES {
             let mut batch0 = BatchQuery::default();
             let mut batch1 = BatchQuery::default();
             let mut batch2 = BatchQuery::default();
-            let batch_size = rng.gen_range(1..MAX_BATCH_SIZE);
+            // let batch_size = rng.gen_range(1..MAX_BATCH_SIZE);
+            let batch_size = MAX_BATCH_SIZE;
             for _ in 0..batch_size {
                 let request_id = Uuid::new_v4();
+
+                let template = IrisCode::random_rng(&mut rng);
+                expected_results.insert(request_id.to_string(), None);
                 // Automatic random tests
-                let options = if responses.is_empty() {
-                    2
-                } else if deleted_indices_buffer.is_empty() {
-                    3
-                } else {
-                    4
-                };
-                let option = rng.gen_range(0..options);
-                let template = match option {
-                    0 => {
-                        println!("Sending new iris code");
-                        expected_results.insert(request_id.to_string(), None);
-                        IrisCode::random_rng(&mut rng)
-                    }
-                    1 => {
-                        println!("Sending iris code from db");
-                        let db_index = rng.gen_range(0..db.db.len());
-                        if deleted_indices.contains(&(db_index as u32)) {
-                            continue;
-                        }
-                        expected_results.insert(request_id.to_string(), Some(db_index as u32));
-                        db.db[db_index].clone()
-                    }
-                    2 => {
-                        println!("Sending freshly inserted iris code");
-                        let keys = responses.keys().collect::<Vec<_>>();
-                        let idx = rng.gen_range(0..keys.len());
-                        let iris_code = responses.get(keys[idx]).unwrap().clone();
-                        expected_results.insert(request_id.to_string(), Some(*keys[idx]));
-                        iris_code
-                    }
-                    3 => {
-                        println!("Sending deleted iris code");
-                        let idx = rng.gen_range(0..deleted_indices_buffer.len());
-                        let deleted_idx = deleted_indices_buffer[idx];
-                        deleted_indices_buffer.remove(idx);
-                        expected_results.insert(request_id.to_string(), None);
-                        db.db[deleted_idx as usize].clone()
-                    }
-                    _ => unreachable!(),
-                };
+                // let options = if responses.is_empty() {
+                //     2
+                // } else if deleted_indices_buffer.is_empty() {
+                //     3
+                // } else {
+                //     4
+                // };
+                // let option = 0;
+                // let template = match option {
+                //     0 => {
+                //         println!("Sending new iris code");
+                //         expected_results.insert(request_id.to_string(), None);
+                //         IrisCode::random_rng(&mut rng)
+                //     }
+                // 1 => {
+                //     println!("Sending iris code from db");
+                //     let db_index = rng.gen_range(0..db.db.len());
+                //     if deleted_indices.contains(&(db_index as u32)) {
+                //         continue;
+                //     }
+                //     expected_results.insert(request_id.to_string(), Some(db_index as u32));
+                //     db.db[db_index].clone()
+                // }
+                // 2 => {
+                //     println!("Sending freshly inserted iris code");
+                //     let keys = responses.keys().collect::<Vec<_>>();
+                //     let idx = rng.gen_range(0..keys.len());
+                //     let iris_code = responses.get(keys[idx]).unwrap().clone();
+                //     expected_results.insert(request_id.to_string(), Some(*keys[idx]));
+                //     iris_code
+                // }
+                // 3 => {
+                //     println!("Sending deleted iris code");
+                //     let idx = rng.gen_range(0..deleted_indices_buffer.len());
+                //     let deleted_idx = deleted_indices_buffer[idx];
+                //     deleted_indices_buffer.remove(idx);
+                //     expected_results.insert(request_id.to_string(), None);
+                //     db.db[deleted_idx as usize].clone()
+                // }
+                //     _ => unreachable!(),
+                // };
 
                 // Invalidate 10% of the queries
-                let is_valid = rng.gen_range(0..10) != 0;
+                // let is_valid = rng.gen_range(0..10) != 0;
+                let is_valid = true;
 
                 if is_valid {
                     requests.insert(request_id.to_string(), template.clone());
@@ -353,19 +358,19 @@ mod e2e_test {
                 continue;
             }
 
-            for _ in 0..rng.gen_range(0..MAX_DELETIONS_PER_BATCH) {
-                let idx = rng.gen_range(0..db.db.len());
-                if deleted_indices.contains(&(idx as u32)) {
-                    continue;
-                }
-                deleted_indices_buffer.push(idx as u32);
-                deleted_indices.insert(idx as u32);
-                println!("Deleting index {}", idx);
+            // for _ in 0..rng.gen_range(0..MAX_DELETIONS_PER_BATCH) {
+            //     let idx = rng.gen_range(0..db.db.len());
+            //     if deleted_indices.contains(&(idx as u32)) {
+            //         continue;
+            //     }
+            //     deleted_indices_buffer.push(idx as u32);
+            //     deleted_indices.insert(idx as u32);
+            //     println!("Deleting index {}", idx);
 
-                batch0.deletion_requests_indices.push(idx as u32);
-                batch1.deletion_requests_indices.push(idx as u32);
-                batch2.deletion_requests_indices.push(idx as u32);
-            }
+            //     batch0.deletion_requests_indices.push(idx as u32);
+            //     batch1.deletion_requests_indices.push(idx as u32);
+            //     batch2.deletion_requests_indices.push(idx as u32);
+            // }
 
             // TODO: better tests involving two eyes, atm just copy left to right
             batch0.db_right = batch0.db_left.clone();

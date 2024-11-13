@@ -15,15 +15,15 @@ fn random_vec(n: usize, m: usize, max_value: u32) -> Vec<u16> {
 }
 
 const RNG_SEED: u64 = 42;
-const DB_SIZE: usize = 8 * 300_000;
-const QUERY_SIZE: usize = 930;
+const DB_SIZE: usize = 10 * (1 << 16);
+const QUERY_SIZE: usize = 1984;
 const WIDTH: usize = 12800;
 
 fn bench_memcpy(c: &mut Criterion) {
     let mut group = c.benchmark_group("bench_memcpy");
 
-    let db = random_vec(DB_SIZE, WIDTH, P as u32);
-    let query = random_vec(QUERY_SIZE, WIDTH, P as u32);
+    let db = random_vec(DB_SIZE, WIDTH, P as u32); // (길이 12800인 u16 vector) DB_SIZE개
+    let query = random_vec(QUERY_SIZE, WIDTH, P as u32); // (길이 12800인 u16 vector) QUERY_SIZE개
     let device_manager = Arc::new(DeviceManager::init());
 
     let mut engine = ShareDB::init(
